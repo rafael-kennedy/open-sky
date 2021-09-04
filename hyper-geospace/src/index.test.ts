@@ -2,6 +2,7 @@ import { createCore, getEarthquakes } from "../__testing/utils";
 import Hyperbee from "hyperbee";
 import { HyperGeospace } from "./index";
 import { Point, Feature, FeatureCollection } from "geojson";
+import distance from "@turf/distance";
 
 const state: { hyperbee: Hyperbee; hypergeo: HyperGeospace; core: any } = {
   core: null,
@@ -100,5 +101,31 @@ describe("points", () => {
     const [[key]] = await state.hypergeo.create(quakePointCollection);
     const { value } = await state.hypergeo.db.get(key);
     expect(value).toEqual(quakePointCollection.features[0]);
+  });
+
+  describe("query operations", () => {
+    let keys;
+
+    test("allow point and radius search", async () => {
+      const keys = await state.hypergeo.create(
+        getEarthquakes() as FeatureCollection<Point>
+      );
+      const [k, hondurasQuake] = keys.find((v) => v[1].id === "us7000f3w2");
+      const distanceForQuery = distance(hondurasQuake.geometry, {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Point",
+          coordinates: [-83.279333333333, 16.3963333333333],
+        },
+      });
+      const queryResults = await state.hypergeo.findByPointAndRadius({
+        latitude: 19.3963333333333,
+        longitude: -155.279333333333,
+        radiusInKm: 1000,
+      });
+
+      expect(queryResults.length).toBe(2);
+    });
   });
 });

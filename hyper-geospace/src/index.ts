@@ -1,6 +1,6 @@
 import Hyperbee from "hyperbee";
 import { Point, Feature, FeatureCollection } from "geojson";
-import s2 from "nodes2ts";
+import * as s2 from "nodes2ts";
 import { v4 } from "uuid";
 
 interface CreateOptions {
@@ -60,13 +60,12 @@ export class HyperGeospace {
     opts: CreateOptions = {}
   ): Promise<[string, Feature<Point>]> {
     const { resolution = this.minimumResolution, batch } = opts;
-    const [longitude, latitude] = point.geometry.coordinates;
+    const [longitude, latitude, depth] = point.geometry.coordinates;
     if (!point.id) {
       point.id = this.generateId(point);
     }
-    const index = new s2.S2CellId(
-      new s2.S2LatLng(latitude, longitude)
-    ).toToken();
+    const s2point = new s2.S2Point(latitude, longitude, depth);
+    const index = s2.S2CellId.fromPoint(s2point).toToken();
     const key = this.getDocumentKey(index, point.id);
     if (batch) {
       await batch.put(key, point);
@@ -111,5 +110,48 @@ export class HyperGeospace {
 
   async find() {}
 
-  async findByPointAndRadius({ latitude, longitude, radius }) {}
+  async findByPointAndRadius({
+    latitude,
+    longitude,
+    radiusInKm,
+  }): Promise<Array<any>> {
+    const region = s2.Utils.calcRegionFromCenterRadius(
+      new s2.S2LatLng(latitude, longitude),
+      radiusInKm
+    );
+
+    const regionCells = new s2.S2RegionCoverer().getCoveringCells(region);
+
+    // TODO: this is 0% efficient
+    const sortedCells = regionCells
+      .map((v) => v.toToken())
+      .sort((a, b) => a.localeCompare(b));
+
+    const TESTSTREAM = this.db.createReadStream({
+      limit: 50,
+    });
+
+    const stream = this.db.createReadStream({
+      gte: `hg:${sortedCells[0]}`,
+      lte: `hg:${sortedCells[sortedCells.length - 1]}Ω`,
+      limit: 50,
+    });
+
+    return new Promise((resolve, reject) => {
+      let data = [];
+      stream.on("data", (doc) => {
+        console.log(doc);
+        // TODO: refine the result-set
+        data.push(doc);
+      });
+      stream.on("end", (...args) => {
+        console.log("streamEnd", args);
+        resolve(data);
+      });
+      stream.on("error", (e) => {
+        console.error(e);
+        reject(e);
+      });
+    });
+  }
 }
