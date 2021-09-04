@@ -64,8 +64,10 @@ export class HyperGeospace {
     if (!point.id) {
       point.id = this.generateId(point);
     }
-    const s2point = new s2.S2Point(latitude, longitude, depth);
-    const index = s2.S2CellId.fromPoint(s2point).toToken();
+    const cellId = s2.S2CellId.fromPoint(
+      s2.S2LatLng.fromDegrees(latitude, longitude).toPoint()
+    );
+    const index = cellId.toToken();
     const key = this.getDocumentKey(index, point.id);
     if (batch) {
       await batch.put(key, point);
@@ -116,7 +118,7 @@ export class HyperGeospace {
     radiusInKm,
   }): Promise<Array<any>> {
     const region = s2.Utils.calcRegionFromCenterRadius(
-      new s2.S2LatLng(latitude, longitude),
+      s2.S2LatLng.fromDegrees(latitude, longitude),
       radiusInKm
     );
 
@@ -127,10 +129,6 @@ export class HyperGeospace {
       .map((v) => v.toToken())
       .sort((a, b) => a.localeCompare(b));
 
-    const TESTSTREAM = this.db.createReadStream({
-      limit: 50,
-    });
-
     const stream = this.db.createReadStream({
       gte: `hg:${sortedCells[0]}`,
       lte: `hg:${sortedCells[sortedCells.length - 1]}Ω`,
@@ -140,12 +138,12 @@ export class HyperGeospace {
     return new Promise((resolve, reject) => {
       let data = [];
       stream.on("data", (doc) => {
+        // OPENQ: return the byperbee result, or just the geojson doc?
         console.log(doc);
         // TODO: refine the result-set
         data.push(doc);
       });
       stream.on("end", (...args) => {
-        console.log("streamEnd", args);
         resolve(data);
       });
       stream.on("error", (e) => {

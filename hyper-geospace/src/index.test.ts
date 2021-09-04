@@ -104,28 +104,19 @@ describe("points", () => {
   });
 
   describe("query operations", () => {
-    let keys;
-
     test("allow point and radius search", async () => {
-      const keys = await state.hypergeo.create(
-        getEarthquakes() as FeatureCollection<Point>
-      );
-      const [k, hondurasQuake] = keys.find((v) => v[1].id === "us7000f3w2");
-      const distanceForQuery = distance(hondurasQuake.geometry, {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "Point",
-          coordinates: [-83.279333333333, 16.3963333333333],
-        },
-      });
-      const queryResults = await state.hypergeo.findByPointAndRadius({
+      await state.hypergeo.create(getEarthquakes() as FeatureCollection<Point>);
+
+      const pointInHawaii = {
         latitude: 19.3963333333333,
         longitude: -155.279333333333,
+      };
+      const queryResults = await state.hypergeo.findByPointAndRadius({
+        ...pointInHawaii,
         radiusInKm: 1000,
       });
 
-      expect(queryResults.length).toBe(2);
+      expect(queryResults.length).toBe(4);
     });
   });
 });
